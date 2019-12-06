@@ -1,0 +1,222 @@
+#!/bin/bash
+
+function ejecutar(){
+
+	clear
+
+	modulo_principal
+
+}
+
+#########################################################
+#			*** Menú Principal ***
+#########################################################
+
+function modulo_principal(){
+
+	clear
+
+	ipt=/sbin/iptables
+
+	SERVIDOR_IP="$(ip addr show ens32 | grep 'inet ' | cut -f2 | awk '{ print $2}')"
+
+	echo ""
+	echo "----------------------------------------------"
+	echo ""
+	echo " Ingresar número para ejecutar Script Firewall."
+	echo ""
+	echo " [ 1 ] AUTORIZAR la salida de los servicios:"
+	echo ""
+	echo "		DNS / SAMBA / FTP"
+	echo ""
+	echo " [ 2 ] DENEGAR la salida de los servicios:"
+	echo ""
+	echo "		HTTP / NFS"
+	echo ""
+	echo " [ 3 ] VERIFICAR reglas anteriores."
+	echo ""
+	echo " [ 4 ] EJECUTAR regla especifica para bloquear"
+	echo " acceso IP 192.168.50.20 y permitir el ingreso"
+	echo " de los equipos de esa red, no así el ingreso"
+	echo " de los equipos de otras redes."
+	echo ""
+	echo " [ 5 ] Salir."
+	echo ""
+	echo "----------------------------------------------"
+	echo ""
+
+	read -r opcion
+
+	if [ "$opcion" = 1 ];
+
+		then modulo_1
+	fi
+
+	if [ "$opcion" = 2 ];
+
+		then modulo_2
+	fi
+
+	if [ "$opcion" = 3 ];
+
+		then modulo_3
+	fi
+	
+	if [ "$opcion" = 4 ];
+
+		then modulo_4
+	fi
+
+	if [ "$opcion" = 5 ];
+
+		then modulo_salir
+	fi
+
+}
+
+#########################################################
+#				*** Funcion Modulo 1 ***
+#########################################################
+
+function modulo_1(){
+
+	clear
+
+	for ip in $SERVIDOR_IP
+
+	do
+
+		echo " Permitir búsquedas de DNS (tcp, udp al puerto 53) a la ip '$ ipt'"
+
+		$ipt -A OUTPUT -p udp -d $ip --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+		$ipt -A INPUT  -p udp -s $ip --sport 53 -m state --state ESTABLISHED     -j ACCEPT
+		$ipt -A OUTPUT -p tcp -d $ip --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+		$ipt -A INPUT  -p tcp -s $ip --sport 53 -m state --state ESTABLISHED     -j ACCEPT
+
+	done
+
+	for ip in $SERVIDOR_IP
+
+	do
+
+		echo "Permitir conexión a '$ipt' en el puerto 21 FTP"
+
+		$ipt -A OUTPUT -p tcp -d $ip --dport 21  -m state --state NEW,ESTABLISHED -j ACCEPT
+		$ipt -A INPUT  -p tcp -s $ip --sport 21  -m state --state ESTABLISHED     -j ACCEPT
+
+	done
+	
+	
+	iptables -A INPUT -p tcp -m state --state NEW -s $ip --dport 139 -j ACCEPT
+	iptables -A INPUT -p tcp -m state --state NEW -s $ip --dport 445 -j ACCEP
+
+	service iptables save
+
+	clear
+	
+	echo " Reglas aplicadas."
+	
+	read -rsp $' Presiona cualquier tecla para volver.\n' -n 1 key
+	
+	modulo_principal
+
+}
+
+#########################################################
+#				*** Funcion Modulo 2 ***
+#########################################################
+
+function modulo_2(){
+
+	clear
+
+# HTTP
+
+	for ip in $SERVIDOR_IP
+	do
+		echo "Denegar conexión a '$ipt' en el puerto 80 HTTP"
+		$ipt -A OUTPUT -p tcp -d $ip --dport 80  -m state --state NEW,ESTABLISHED -j DROP
+		$ipt -A INPUT  -p tcp -s $ip --sport 80  -m state --state ESTABLISHED     -j DROP
+	done
+
+# NFS
+
+	for ip in $SERVIDOR_IP
+	do
+		echo "Denegar conexión a '$ipt' en el puerto 2049 NFS"
+		$ipt -A OUTPUT -p tcp -d $ip --dport 2049  -m state --state NEW,ESTABLISHED -j DROP
+		$ipt -A INPUT  -p tcp -s $ip --sport 2049  -m state --state ESTABLISHED     -j DROP
+	done
+	
+	service iptables save
+
+	clear
+	
+	echo " Reglas aplicadas."
+	
+	read -rsp $' Presiona cualquier tecla para volver.\n' -n 1 key
+	
+	modulo_principal
+
+}
+
+#########################################################
+#				*** Funcion Modulo 3 ***
+#########################################################
+
+function modulo_3(){
+
+	clear
+	
+	iptables -S
+	iptables -nvL
+
+	echo ""
+	read -rsp $' Presiona cualquier tecla para volver.\n' -n 1 key
+	echo ""
+
+	modulo_principal
+
+}
+
+#########################################################
+#				*** Funcion Modulo 4 ***
+#########################################################
+
+function modulo_4(){
+
+	clear
+
+	iptables -I INPUT -p tcp -s 192.168.50.0/24  -d 192.168.50.0/24 -j ACCEPT
+	iptables -A INPUT -p tcp -d 192.168.50.0/24 -j DROP
+	iptables -I INPUT -p tcp -s 192.168.50.0/24  -d 192.168.50.0/24 -j ACCEPT
+	iptables -A INPUT -p tcp -d 192.168.50.0/24 -j DROP
+	iptables -A INPUT -p tcp -s 192.168.50.20  -d 192.168.50.0/24 -j DROP
+	
+	echo " Reglas aplicadas."
+
+	read -rsp $' Presiona cualquier tecla para volver.\n' -n 1 key
+
+	modulo_principal
+
+}
+
+#########################################################
+#				*** Función Salir ***
+#########################################################
+
+function modulo_salir(){
+
+	clear
+
+	exit 0
+
+}
+
+#########################################################
+#					*** FIN ***
+#########################################################
+
+clear
+
+ejecutar
